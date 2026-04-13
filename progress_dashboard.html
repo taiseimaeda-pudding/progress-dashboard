@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>進捗ダッシュボード</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    background: #f5f5f3;
+    color: #1a1a1a;
+    padding: 2rem 1.5rem;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: .5rem; color: #1a1a1a; }
+  .last-updated { font-size: 11px; color: #aaa; margin-bottom: 2rem; }
+
+  .controls {
+    background: #fff;
+    border: 0.5px solid rgba(0,0,0,0.1);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: #666; white-space: nowrap; }
+  .controls input[type=range] { flex: 1; min-width: 100px; max-width: 180px; accent-color: #534AB7; }
+  .controls span { font-size: 12px; font-weight: 500; color: #1a1a1a; min-width: 32px; }
+
+  .legend { display: flex; gap: 16px; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #666; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+  .ld-ok     { background: #f0f0ee; border: 1.5px solid #ccc; }
+  .ld-warn   { background: #FEF3C7; border: 1.5px solid #F59E0B; }
+  .ld-danger { background: #FEE2E2; border: 1.5px solid #EF4444; }
+
+  .section { margin-bottom: 2.5rem; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: .75rem; }
+  .sec-badge { font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 99px; }
+  .bs { background: #EEEDFE; color: #3C3489; }
+  .bv { background: #E1F5EE; color: #085041; }
+  .sec-title { font-size: 16px; font-weight: 500; color: #1a1a1a; }
+  .sec-avg { font-size: 13px; color: #888; margin-left: auto; }
+  .sec-avg b { font-weight: 500; color: #1a1a1a; }
+
+  .avg-track { height: 7px; background: #e8e8e6; border-radius: 99px; overflow: hidden; margin-bottom: 1rem; }
+  .avg-fill { height: 100%; border-radius: 99px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+  .fs { background: #534AB7; }
+  .fv { background: #1D9E75; }
+
+  .cards { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: #fff;
+    border: 1.5px solid rgba(0,0,0,0.08);
+    border-radius: 12px;
+    padding: 14px 16px;
+    transition: border-color .3s, background .3s;
+  }
+  .card.warn   { border-color: #F59E0B; background: #FFFBEB; }
+  .card.danger { border-color: #EF4444; background: #FFF5F5; }
+
+  .card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .seminar-name { font-size: 14px; font-weight: 500; color: #1a1a1a; flex: 1; }
+
+  .ball-badge {
+    font-size: 11px; font-weight: 500; padding: 3px 10px;
+    border-radius: 99px; display: flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .ball-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .ball-admin { background: #FEF3C7; color: #854F0B; }
+  .ball-admin .ball-dot { background: #BA7517; }
+  .ball-inst  { background: #EEEDFE; color: #3C3489; }
+  .ball-inst  .ball-dot { background: #534AB7; }
+
+  .alert-badge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
+  .alert-warn   { background: #FEF3C7; color: #92400E; }
+  .alert-danger { background: #FEE2E2; color: #991B1B; }
+
+  .pct-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
+  .current-status { font-size: 12px; font-weight: 500; color: #1a1a1a; }
+  .pct-right { display: flex; align-items: baseline; gap: 8px; }
+  .pct-label  { font-size: 12px; color: #888; }
+  .days-label { font-size: 11px; color: #bbb; }
+  .days-warn   { color: #B45309; }
+  .days-danger { color: #DC2626; }
+
+  .track { height: 8px; background: #e8e8e6; border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+  .fill { height: 100%; border-radius: 99px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+  .fill-s    { background: #534AB7; }
+  .fill-v    { background: #1D9E75; }
+  .fill-done { background: #639922; }
+
+  .ticks-wrap { display: flex; width: 100%; }
+  .tick-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  .tick-line  { width: 1px; height: 4px; background: rgba(0,0,0,0.12); }
+  .tick-label { font-size: 9px; color: #bbb; margin-top: 2px; text-align: center; line-height: 1.3; word-break: keep-all; }
+  .tick-item.active .tick-label { color: #888; }
+  .tick-item.cur-s .tick-line  { background: #534AB7; width: 2px; }
+  .tick-item.cur-v .tick-line  { background: #1D9E75; width: 2px; }
+  .tick-item.cur-s .tick-label { color: #534AB7; font-weight: 500; }
+  .tick-item.cur-v .tick-label { color: #1D9E75; font-weight: 500; }
+
+  @media (max-width: 600px) {
+    body { padding: 1rem; }
+    .tick-label { font-size: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>進捗ダッシュボード</h1>
+<div class="last-updated" id="last-updated"></div>
+
+<div class="controls">
+  <label>要確認：</label>
+  <input type="range" min="1" max="14" value="5" step="1" id="warn-days" oninput="update()">
+  <span id="warn-out">5日</span>
+  <label style="margin-left:12px;">危険：</label>
+  <input type="range" min="1" max="30" value="10" step="1" id="danger-days" oninput="update()">
+  <span id="danger-out">10日</span>
+  <label style="margin-left:12px;">以上更新なし</label>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot ld-ok"></div>順調</div>
+  <div class="legend-item"><div class="legend-dot ld-warn"></div>要確認</div>
+  <div class="legend-item"><div class="legend-dot ld-danger"></div>危険</div>
+</div>
+
+<div class="section">
+  <div class="sec-head">
+    <span class="sec-badge bs">セミナー</span>
+    <span class="sec-title">段階1〜7</span>
+    <span class="sec-avg">平均：<b id="avg-s">—</b></span>
+  </div>
+  <div class="avg-track"><div class="avg-fill fs" id="bar-s" style="width:0%"></div></div>
+  <div class="cards" id="cards-s"></div>
+</div>
+
+<div class="section">
+  <div class="sec-head">
+    <span class="sec-badge bv">VOD</span>
+    <span class="sec-title">段階1〜5</span>
+    <span class="sec-avg">平均：<b id="avg-v">—</b></span>
+  </div>
+  <div class="avg-track"><div class="avg-fill fv" id="bar-v" style="width:0%"></div></div>
+  <div class="cards" id="cards-v"></div>
+</div>
+
+<script>
+// ============================================================
+// ステータス定義（実際の名称に変更してください）
+// ============================================================
+const STATUS_S = [
+  "企画書作成中",
+  "コンテンツ制作中",
+  "販売ページ作成中",
+  "決済設定中",
+  "運営レビュー中",
+  "最終確認中",
+  "販売中"
+];
+const STATUS_V = [
+  "企画書作成中",
+  "収録中",
+  "編集中",
+  "運営レビュー中",
+  "公開中"
+];
+
+// ============================================================
+// ダミーデータ（Notion連携後はAPIから取得に切り替え）
+// name: 講師名, stage: 現在の段階(1〜最大), ball: "admin"=運営 / "inst"=講師, days: 最終更新からの経過日数
+// ============================================================
+const teamS = [
+  { name: "田中", stage: 7, ball: "admin", days: 1  },
+  { name: "鈴木", stage: 6, ball: "inst",  days: 12 },
+  { name: "佐藤", stage: 5, ball: "admin", days: 3  },
+  { name: "山田", stage: 7, ball: "admin", days: 0  },
+  { name: "伊藤", stage: 4, ball: "inst",  days: 7  },
+  { name: "渡辺", stage: 3, ball: "inst",  days: 15 },
+  { name: "中村", stage: 6, ball: "admin", days: 2  },
+];
+const teamV = [
+  { name: "小林", stage: 5, ball: "admin", days: 0  },
+  { name: "加藤", stage: 3, ball: "inst",  days: 8  },
+  { name: "吉田", stage: 5, ball: "admin", days: 1  },
+  { name: "山口", stage: 2, ball: "inst",  days: 20 },
+  { name: "松本", stage: 4, ball: "admin", days: 4  },
+  { name: "井上", stage: 1, ball: "inst",  days: 6  },
+];
+
+// ============================================================
+// 描画ロジック（通常は変更不要）
+// ============================================================
+function ballHtml(ball) {
+  return ball === "admin"
+    ? `<span class="ball-badge ball-admin"><span class="ball-dot"></span>運営ボール</span>`
+    : `<span class="ball-badge ball-inst"><span class="ball-dot"></span>講師ボール</span>`;
+}
+
+function alertHtml(days, w, d) {
+  if (days >= d) return `<span class="alert-badge alert-danger">危険</span>`;
+  if (days >= w) return `<span class="alert-badge alert-warn">要確認</span>`;
+  return "";
+}
+
+function cardCls(days, w, d) {
+  if (days >= d) return "danger";
+  if (days >= w) return "warn";
+  return "";
+}
+
+function daysCls(days, w, d) {
+  if (days >= d) return "days-danger";
+  if (days >= w) return "days-warn";
+  return "";
+}
+
+function ticksHtml(stage, statuses, curCls) {
+  return statuses.map((label, i) => {
+    const isCur = (i + 1) === stage;
+    const isPast = (i + 1) < stage;
+    let cls = "tick-item";
+    if (isCur) cls += " " + curCls;
+    else if (isPast) cls += " active";
+    return `<div class="${cls}"><div class="tick-line"></div><div class="tick-label">${label}</div></div>`;
+  }).join("");
+}
+
+function renderTeam(team, statuses, containerId, fillCls, curCls, w, d) {
+  const max = statuses.length;
+  document.getElementById(containerId).innerHTML = team.map(inst => {
+    const p = Math.round(inst.stage / max * 100);
+    const done = inst.stage === max;
+    const fc = done ? "fill-done" : fillCls;
+    const statusName = done ? "完了" : statuses[inst.stage - 1];
+    const daysText = inst.days === 0 ? "本日更新" : `${inst.days}日前`;
+    return `
+      <div class="card ${cardCls(inst.days, w, d)}">
+        <div class="card-top">
+          <div class="seminar-name">${inst.name}セミナー</div>
+          ${ballHtml(inst.ball)}
+          ${alertHtml(inst.days, w, d)}
+        </div>
+        <div class="pct-row">
+          <span class="current-status">${statusName}</span>
+          <div class="pct-right">
+            <span class="days-label ${daysCls(inst.days, w, d)}">${daysText}</span>
+            <span class="pct-label">${p}%</span>
+          </div>
+        </div>
+        <div class="track"><div class="fill ${fc}" style="width:${p}%"></div></div>
+        <div class="ticks-wrap">${ticksHtml(inst.stage, statuses, curCls)}</div>
+      </div>`;
+  }).join("");
+}
+
+function calcAvg(team, max) {
+  return Math.round(team.reduce((a, i) => a + Math.round(i.stage / max * 100), 0) / team.length);
+}
+
+function update() {
+  const w = parseInt(document.getElementById("warn-days").value);
+  const d = parseInt(document.getElementById("danger-days").value);
+  document.getElementById("warn-out").textContent = w + "日";
+  document.getElementById("danger-out").textContent = d + "日";
+  renderTeam(teamS, STATUS_S, "cards-s", "fill-s", "cur-s", w, d);
+  renderTeam(teamV, STATUS_V, "cards-v", "fill-v", "cur-v", w, d);
+  const as = calcAvg(teamS, STATUS_S.length);
+  const av = calcAvg(teamV, STATUS_V.length);
+  document.getElementById("avg-s").textContent = as + "%";
+  document.getElementById("avg-v").textContent = av + "%";
+  document.getElementById("bar-s").style.width = as + "%";
+  document.getElementById("bar-v").style.width = av + "%";
+}
+
+// 最終更新時刻
+const now = new Date();
+document.getElementById("last-updated").textContent =
+  `最終更新：${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+update();
+</script>
+</body>
+</html>
